@@ -1,12 +1,18 @@
 package fq
 
-import "testing"
+import (
+	"io"
+	"io/ioutil"
+	"os"
+	"testing"
+)
 
 func TestNewWriter(t *testing.T) {
-	w, err := NewWriter("test.log")
+	w, r, cleanup, err := newReaderWriter()
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer cleanup()
 
 	tests := []string{
 		"hello world!",
@@ -18,11 +24,6 @@ func TestNewWriter(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-	}
-
-	r, err := NewReader("test.log")
-	if err != nil {
-		t.Fatal(err)
 	}
 
 	for _, test := range tests {
@@ -42,4 +43,49 @@ func TestNewWriter(t *testing.T) {
 	if string(b) != tests[1] {
 		t.Errorf("ReadAt expected: %s, got %s", tests[1], string(b))
 	}
+}
+
+func newReaderWriter() (w io.Writer, r *Reader, cleanup func(), err error) {
+	wf, err := ioutil.TempFile(os.TempDir(), "fq-")
+	if err != nil {
+		return
+	}
+
+	wlf, err := ioutil.TempFile(os.TempDir(), "fq-")
+	if err != nil {
+		wf.Close()
+		os.Remove(wf.Name())
+		return
+	}
+
+	rf, err := os.Open(wf.Name())
+	if err != nil {
+		wf.Close()
+		os.Remove(wf.Name())
+		wlf.Close()
+		os.Remove(wlf.Name())
+		return
+	}
+
+	rlf, err := os.Open(wlf.Name())
+	if err != nil {
+		wf.Close()
+		rf.Close()
+		os.Remove(wf.Name())
+		wlf.Close()
+		os.Remove(wlf.Name())
+		return
+	}
+
+	cleanup = func() {
+		wf.Close()
+		rf.Close()
+		wlf.Close()
+		rlf.Close()
+		os.Remove(wf.Name())
+		os.Remove(wlf.Name())
+	}
+	w, _ = NewWriter(wf, wlf)
+	r, _ = NewReader(rf, rlf)
+	return
 }

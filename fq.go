@@ -17,7 +17,7 @@ type writer struct {
 	log   io.WriteSeeker
 }
 
-func NewWriter(name string) (io.Writer, error) {
+func NewFileWriter(name string) (io.Writer, error) {
 	l, err := os.OpenFile(name, os.O_WRONLY|os.O_CREATE|os.O_APPEND, os.ModePerm)
 	if err != nil {
 		return nil, err
@@ -26,11 +26,14 @@ func NewWriter(name string) (io.Writer, error) {
 	if err != nil {
 		return nil, err
 	}
-	w := &writer{
-		log:   l,
-		index: i,
-	}
-	return w, nil
+	return NewWriter(l, i)
+}
+
+func NewWriter(log, index io.WriteSeeker) (io.Writer, error) {
+	return &writer{
+		log:   log,
+		index: index,
+	}, nil
 }
 
 func (w *writer) Write(b []byte) (int, error) {
@@ -79,7 +82,7 @@ type Reader struct {
 	offset int64
 }
 
-func NewReader(name string) (*Reader, error) {
+func NewFileReader(name string) (*Reader, error) {
 	l, err := os.Open(name)
 	if err != nil {
 		return nil, err
@@ -90,11 +93,14 @@ func NewReader(name string) (*Reader, error) {
 		return nil, err
 	}
 
-	r := &Reader{
-		log:   l,
-		index: i,
-	}
-	return r, nil
+	return NewReader(l, i)
+}
+
+func NewReader(log, index io.ReadSeeker) (*Reader, error) {
+	return &Reader{
+		log:   log,
+		index: index,
+	}, nil
 }
 
 func (r *Reader) Read() ([]byte, error) {
