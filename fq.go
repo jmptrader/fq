@@ -17,6 +17,9 @@ type writer struct {
 	log   io.WriteSeeker
 }
 
+// NewFileWriter creates a new fq queue for the given file name.
+//
+// This creates two files, one with the name provided and another with .index postfixed.
 func NewFileWriter(name string) (io.Writer, error) {
 	l, err := os.OpenFile(name, os.O_WRONLY|os.O_CREATE|os.O_APPEND, os.ModePerm)
 	if err != nil {
@@ -29,6 +32,7 @@ func NewFileWriter(name string) (io.Writer, error) {
 	return NewWriter(l, i)
 }
 
+// NewWriter create a new fq queue.
 func NewWriter(log, index io.WriteSeeker) (io.Writer, error) {
 	return &writer{
 		log:   log,
@@ -36,7 +40,10 @@ func NewWriter(log, index io.WriteSeeker) (io.Writer, error) {
 	}, nil
 }
 
+// Write writes len(b) bytes from b to the queue.
 func (w *writer) Write(b []byte) (int, error) {
+	w.Lock()
+	defer w.Unlock()
 	current, err := w.log.Seek(0, io.SeekCurrent)
 	if err != nil {
 		return -1, err
@@ -80,8 +87,11 @@ type Reader struct {
 	log    io.ReadSeeker
 	index  io.ReadSeeker
 	offset int64
+
+	l sync.Mutex
 }
 
+// NewFileReader opens fq queue for reading
 func NewFileReader(name string) (*Reader, error) {
 	l, err := os.Open(name)
 	if err != nil {
@@ -96,6 +106,7 @@ func NewFileReader(name string) (*Reader, error) {
 	return NewReader(l, i)
 }
 
+// NewReader opens fq queue for reading given log and index readers
 func NewReader(log, index io.ReadSeeker) (*Reader, error) {
 	return &Reader{
 		log:   log,
@@ -103,13 +114,34 @@ func NewReader(log, index io.ReadSeeker) (*Reader, error) {
 	}, nil
 }
 
+// Offset returns the current offset of the queue
+func (r *Reader) Offset() int64 {
+	return r.offset
+}
+
+// Read reads the next message in the queue.
+//
+// Read returns an io.EOF when there are no more messages to read.
 func (r *Reader) Read() ([]byte, error) {
+	r.l.Lock()
+	defer r.l.Unlock()
 	return r.read()
 }
 
+// ReadAt reads the message at the given offset
+//
+// ReadAt returns an io.EOF when an incorrect offset is provided.
 func (r *Reader) ReadAt(offset int64) ([]byte, error) {
+	r.l.Lock()
+	defer r.l.Unlock()
+
+	original := r.offset
 	r.offset = offset
-	return r.read()
+	ret, err := r.read()
+	if err != nil {
+		r.offset = original
+	}
+	return ret, err
 }
 
 func (r *Reader) read() ([]byte, error) {
