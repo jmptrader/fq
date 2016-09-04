@@ -1,0 +1,2 @@
+* Fq 
+Fq is a queue based on a file built with similar principles of Kafka.

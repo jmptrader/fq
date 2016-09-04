@@ -1,0 +1,6 @@
+# emacs stuffs
+*~
+
+# test log files
+*.log
+*.log.index
