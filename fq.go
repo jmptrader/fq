@@ -11,16 +11,18 @@ import (
 
 const indexPostfix = ".index"
 
-type writer struct {
+type Writer struct {
 	sync.Mutex
 	index io.WriteSeeker
 	log   io.WriteSeeker
+
+	close func()
 }
 
-// NewFileWriter creates a new fq queue for the given file name.
+// NewWriter creates a new fq queue for writing.
 //
 // This creates two files, one with the name provided and another with .index postfixed.
-func NewFileWriter(name string) (io.Writer, error) {
+func NewWriter(name string) (*Writer, error) {
 	l, err := os.OpenFile(name, os.O_WRONLY|os.O_CREATE|os.O_APPEND, os.ModePerm)
 	if err != nil {
 		return nil, err
@@ -29,19 +31,25 @@ func NewFileWriter(name string) (io.Writer, error) {
 	if err != nil {
 		return nil, err
 	}
-	return NewWriter(l, i)
+	w := &Writer{
+		log:   l,
+		index: i,
+		close: func() {
+			l.Close()
+			i.Close()
+		},
+	}
+	return w, nil
 }
 
-// NewWriter create a new fq queue.
-func NewWriter(log, index io.WriteSeeker) (io.Writer, error) {
-	return &writer{
-		log:   log,
-		index: index,
-	}, nil
+func (w *Writer) Close() {
+	if w.close != nil {
+		w.close()
+	}
 }
 
 // Write writes len(b) bytes from b to the queue.
-func (w *writer) Write(b []byte) (int, error) {
+func (w *Writer) Write(b []byte) (int, error) {
 	w.Lock()
 	defer w.Unlock()
 	current, err := w.log.Seek(0, io.SeekCurrent)
